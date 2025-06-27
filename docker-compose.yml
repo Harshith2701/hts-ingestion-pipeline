@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:14
+    restart: always
+    environment:
+      POSTGRES_USER: htsuser
+      POSTGRES_PASSWORD: htspass
+      POSTGRES_DB: htsdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: ./app
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: htsdb
+      DB_USER: htsuser
+      DB_PASS: htspass
+
+  airflow:
+    image: apache/airflow:2.9.1-python3.10
+    container_name: airflow
+    restart: always
+    depends_on:
+      - db
+    environment:
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://htsuser:htspass@db:5432/htsdb
+    volumes:
+      - ./app:/opt/airflow/app
+      - ./app/dags:/opt/airflow/dags
+    ports:
+      - "8080:8080"
+    command: >
+      bash -c "
+      airflow db migrate &&
+      airflow users create --username admin --firstname admin --lastname admin --role Admin --email admin@example.com --password admin &&
+      airflow scheduler & airflow webserver"
+
+volumes:
+  pgdata:
